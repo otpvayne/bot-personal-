@@ -1,0 +1,17 @@
+[app]
+name = "bot-personal-monkeyandzoe"
+primary_region = "mia"
+
+[build]
+
+[env]
+ENVIRONMENT = "production"
+LOG_LEVEL = "INFO"
+
+# Las variables secretas (TOKEN, FIREBASE) se agregan con:
+# fly secrets set TELEGRAM_BOT_TOKEN=xxx FIREBASE_DB_URL=xxx FIREBASE_CREDENTIALS_JSON=xxx
+
+[[vm]]
+memory = "256mb"
+cpu_kind = "shared"
+cpus = 1
