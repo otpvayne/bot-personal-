@@ -1,7 +1,7 @@
 """Handlers para gestión de tareas."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytz
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -22,15 +22,13 @@ from utils.constants import (
     NOMBRE_TAREA,
     PRIORIDAD_TAREA,
     PRIORIDADES,
-    PRIORIDADES_LISTA,
 )
-from utils.formatters import formatear_lista_tareas
+from utils.formatters import fmt_fecha
 from utils.validators import (
     es_chat_privado,
     validar_descripcion_tarea,
     validar_fecha,
     validar_nombre_tarea,
-    validar_prioridad,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,17 +36,17 @@ TIMEZONE = "America/Bogota"
 _tz = pytz.timezone(TIMEZONE)
 
 # ---------------------------------------------------------------------------
-# Teclado inline de prioridades
+# Teclados
 # ---------------------------------------------------------------------------
 
 _TECLADO_PRIORIDAD = InlineKeyboardMarkup([
     [
         InlineKeyboardButton("🔴 Crítica", callback_data="prio_crítica"),
-        InlineKeyboardButton("🟠 Alta", callback_data="prio_alta"),
+        InlineKeyboardButton("🟠 Alta",    callback_data="prio_alta"),
     ],
     [
-        InlineKeyboardButton("🟡 Media", callback_data="prio_media"),
-        InlineKeyboardButton("🟢 Baja", callback_data="prio_baja"),
+        InlineKeyboardButton("🟡 Media",   callback_data="prio_media"),
+        InlineKeyboardButton("🟢 Baja",    callback_data="prio_baja"),
     ],
 ])
 
@@ -57,29 +55,52 @@ _TECLADO_CANCELAR = InlineKeyboardMarkup([
 ])
 
 
+def _teclado_tarea(task_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Completar", callback_data=f"completar_{task_id}"),
+        InlineKeyboardButton("🗑️ Eliminar",  callback_data=f"eliminar_{task_id}"),
+    ]])
+
+
+# ---------------------------------------------------------------------------
+# Helper: formatear una tarea con botones
+# ---------------------------------------------------------------------------
+
+def _texto_tarea(t: dict) -> str:
+    emoji = PRIORIDADES.get(t.get("prioridad", "media"), "⚪")
+    prioridad = t.get("prioridad", "media").upper()
+    nombre = t.get("nombre", "")
+    vence = fmt_fecha(t.get("fecha_vencimiento", ""))
+    desc = t.get("descripcion", "")
+    lineas = [
+        f"{emoji} *[{prioridad}]* {nombre}",
+        f"📅 Vence: {vence}",
+    ]
+    if desc:
+        lineas.append(f"📝 {desc}")
+    return "\n".join(lineas)
+
+
 # ---------------------------------------------------------------------------
 # /tarea — creación rápida
 # ---------------------------------------------------------------------------
 
 async def cmd_tarea_rapida(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Crea una tarea rápida con la fecha de hoy y prioridad media."""
     if not es_chat_privado(update):
         return
     user = update.effective_user
     if not verificar_rate_limit(user.id):
-        await update.message.reply_text("⏳ Demasiados comandos. Espera unos segundos.")
+        await update.message.reply_text("⏳ Demasiados comandos.")
         return
 
-    args = context.args
-    if not args:
+    if not context.args:
         await update.message.reply_text(
-            "❌ Uso: `/tarea Nombre de la tarea`\n"
-            "Ejemplo: `/tarea Enviar propuesta`",
+            "❌ Uso: `/tarea Nombre de la tarea`\nEjemplo: `/tarea Enviar propuesta`",
             parse_mode="Markdown",
         )
         return
 
-    nombre = " ".join(args)
+    nombre = " ".join(context.args)
     ok, err = validar_nombre_tarea(nombre)
     if not ok:
         await update.message.reply_text(f"❌ {err}")
@@ -92,16 +113,13 @@ async def cmd_tarea_rapida(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         get_manager().crear_tarea(user.id, tarea)
     except Exception as e:
         logger.error("Error creando tarea: %s", e)
-        await update.message.reply_text("❌ Error al guardar la tarea. Intenta de nuevo.")
+        await update.message.reply_text("❌ Error al guardar la tarea.")
         return
 
-    emoji = PRIORIDADES["media"]
     await update.message.reply_text(
-        f"✅ *Tarea creada:*\n\n"
-        f"{emoji} {nombre}\n"
-        f"📅 Vence: hoy\n"
-        f"🆔 ID: `{tarea.id}`",
+        f"✅ *Tarea creada:*\n\n🟡 {nombre}\n📅 Vence: hoy",
         parse_mode="Markdown",
+        reply_markup=_teclado_tarea(tarea.id),
     )
 
 
@@ -110,7 +128,6 @@ async def cmd_tarea_rapida(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 # ---------------------------------------------------------------------------
 
 async def cmd_newtask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Inicia el flujo de creación de tarea detallada."""
     if not es_chat_privado(update):
         return ConversationHandler.END
     user = update.effective_user
@@ -136,8 +153,7 @@ async def recibir_nombre_tarea(update: Update, context: ContextTypes.DEFAULT_TYP
 
     context.user_data["nombre"] = nombre
     await update.message.reply_text(
-        "📝 *Nueva tarea — Paso 2/4*\n\n"
-        "¿Cuándo vence? (YYYY-MM-DD, *hoy* o *mañana*)",
+        "📝 *Nueva tarea — Paso 2/4*\n\n¿Cuándo vence? (YYYY-MM-DD, *hoy* o *mañana*)",
         parse_mode="Markdown",
         reply_markup=_TECLADO_CANCELAR,
     )
@@ -160,7 +176,6 @@ async def recibir_fecha_tarea(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def recibir_prioridad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Procesa la prioridad seleccionada por botón."""
     query = update.callback_query
     await query.answer()
 
@@ -207,16 +222,10 @@ async def recibir_descripcion_tarea(update: Update, context: ContextTypes.DEFAUL
         context.user_data.clear()
         return ConversationHandler.END
 
-    emoji = PRIORIDADES[tarea.prioridad]
-    desc_txt = f"\n📄 {tarea.descripcion}" if tarea.descripcion else ""
     await update.message.reply_text(
-        f"✅ *¡Tarea creada!*\n\n"
-        f"{emoji} *{tarea.nombre}*\n"
-        f"📅 Vence: {tarea.fecha_vencimiento}\n"
-        f"🎯 Prioridad: {tarea.prioridad.capitalize()}"
-        f"{desc_txt}\n"
-        f"🆔 ID: `{tarea.id}`",
+        f"✅ *¡Tarea creada!*\n\n{_texto_tarea(tarea.to_dict())}",
         parse_mode="Markdown",
+        reply_markup=_teclado_tarea(tarea.id),
     )
     context.user_data.clear()
     return ConversationHandler.END
@@ -225,25 +234,22 @@ async def recibir_descripcion_tarea(update: Update, context: ContextTypes.DEFAUL
 async def cancelar_tarea_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    if query.data == "cancelar_tarea":
-        await query.edit_message_text("❌ Creación de tarea cancelada.")
-        context.user_data.clear()
+    await query.edit_message_text("❌ Creación de tarea cancelada.")
+    context.user_data.clear()
     return ConversationHandler.END
 
 
 async def cmd_cancelar_tarea(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Cancela la conversación con /cancelar."""
     context.user_data.clear()
     await update.message.reply_text("❌ Operación cancelada.")
     return ConversationHandler.END
 
 
 # ---------------------------------------------------------------------------
-# /tareas — listar
+# /tareas — listar con botones por tarea
 # ---------------------------------------------------------------------------
 
 async def cmd_tareas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Lista tareas pendientes con filtros opcionales."""
     if not es_chat_privado(update):
         return
     user = update.effective_user
@@ -260,9 +266,7 @@ async def cmd_tareas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             tareas = manager.listar_tareas_por_fecha(user.id, hoy)
             titulo = "TAREAS PARA HOY"
         elif filtro in ("mañana", "manana", "tomorrow"):
-            from datetime import timedelta
-            manana = hoy + timedelta(days=1)
-            tareas = manager.listar_tareas_por_fecha(user.id, manana)
+            tareas = manager.listar_tareas_por_fecha(user.id, hoy + timedelta(days=1))
             titulo = "TAREAS PARA MAÑANA"
         elif filtro in ("semana", "week"):
             tareas = manager.listar_tareas_semana(user.id)
@@ -275,106 +279,85 @@ async def cmd_tareas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_text("❌ Error al obtener las tareas.")
         return
 
-    mensaje = formatear_lista_tareas(tareas, titulo)
-    await update.message.reply_text(mensaje, parse_mode="Markdown")
-
-
-# ---------------------------------------------------------------------------
-# /completar — marcar tarea como hecha
-# ---------------------------------------------------------------------------
-
-async def cmd_completar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not es_chat_privado(update):
-        return
-    user = update.effective_user
-    if not verificar_rate_limit(user.id):
-        await update.message.reply_text("⏳ Demasiados comandos.")
+    if not tareas:
+        await update.message.reply_text("✅ No tienes tareas pendientes. ¡Estás al día!")
         return
 
-    if not context.args:
+    await update.message.reply_text(
+        f"📋 *{titulo}* — {len(tareas)} tarea{'s' if len(tareas) != 1 else ''}",
+        parse_mode="Markdown",
+    )
+
+    # Cada tarea en su propio mensaje con botones
+    for t in tareas:
         await update.message.reply_text(
-            "❌ Uso: `/completar ID_DE_TAREA`\n"
-            "Usa `/tareas` para ver los IDs.",
+            _texto_tarea(t),
             parse_mode="Markdown",
+            reply_markup=_teclado_tarea(t["id"]),
         )
-        return
 
-    task_id = context.args[0].strip()
+
+# ---------------------------------------------------------------------------
+# Callbacks de botones ✅ Completar y 🗑️ Eliminar
+# ---------------------------------------------------------------------------
+
+async def callback_completar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    task_id = query.data.replace("completar_", "")
+    user = update.effective_user
+
     try:
         exito = get_manager().completar_tarea(user.id, task_id)
     except Exception as e:
         logger.error("Error completando tarea: %s", e)
-        await update.message.reply_text("❌ Error al completar la tarea.")
+        await query.edit_message_text("❌ Error al completar la tarea.")
         return
 
     if exito:
-        await update.message.reply_text(
-            f"✅ Tarea `{task_id}` marcada como completada. ¡Buen trabajo!",
+        # Editar el mensaje original quitando los botones
+        texto_original = query.message.text or ""
+        await query.edit_message_text(
+            f"✅ ~~{texto_original}~~\n\n_Completada_ 🎉",
             parse_mode="Markdown",
         )
     else:
-        await update.message.reply_text(
-            f"❌ No encontré ninguna tarea con ID `{task_id}`.",
-            parse_mode="Markdown",
-        )
+        await query.answer("❌ Tarea no encontrada.", show_alert=True)
 
 
-# ---------------------------------------------------------------------------
-# /eliminar — eliminar tarea
-# ---------------------------------------------------------------------------
+async def callback_eliminar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
 
-async def cmd_eliminar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not es_chat_privado(update):
-        return
+    task_id = query.data.replace("eliminar_", "")
     user = update.effective_user
-    if not verificar_rate_limit(user.id):
-        await update.message.reply_text("⏳ Demasiados comandos.")
-        return
 
-    if not context.args:
-        await update.message.reply_text(
-            "❌ Uso: `/eliminar ID_DE_TAREA`\n"
-            "Usa `/tareas` para ver los IDs.",
-            parse_mode="Markdown",
-        )
-        return
-
-    task_id = context.args[0].strip()
     try:
         exito = get_manager().eliminar_tarea(user.id, task_id)
     except Exception as e:
         logger.error("Error eliminando tarea: %s", e)
-        await update.message.reply_text("❌ Error al eliminar la tarea.")
+        await query.edit_message_text("❌ Error al eliminar la tarea.")
         return
 
     if exito:
-        await update.message.reply_text(
-            f"🗑️ Tarea `{task_id}` eliminada.",
-            parse_mode="Markdown",
-        )
+        await query.edit_message_text("🗑️ _Tarea eliminada._", parse_mode="Markdown")
     else:
-        await update.message.reply_text(
-            f"❌ No encontré ninguna tarea con ID `{task_id}`.",
-            parse_mode="Markdown",
-        )
+        await query.answer("❌ Tarea no encontrada.", show_alert=True)
 
 
 # ---------------------------------------------------------------------------
-# ConversationHandler de /newtask
+# ConversationHandler de /newtask + handlers de botones
 # ---------------------------------------------------------------------------
 
 def build_newtask_conversation() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[CommandHandler("newtask", cmd_newtask)],
         states={
-            NOMBRE_TAREA: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_nombre_tarea)],
-            FECHA_TAREA: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_fecha_tarea)],
-            PRIORIDAD_TAREA: [
-                CallbackQueryHandler(recibir_prioridad_callback, pattern="^(prio_|cancelar_tarea)"),
-            ],
-            DESCRIPCION_TAREA: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_descripcion_tarea)
-            ],
+            NOMBRE_TAREA:    [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_nombre_tarea)],
+            FECHA_TAREA:     [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_fecha_tarea)],
+            PRIORIDAD_TAREA: [CallbackQueryHandler(recibir_prioridad_callback, pattern="^(prio_|cancelar_tarea)")],
+            DESCRIPCION_TAREA: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_descripcion_tarea)],
         },
         fallbacks=[
             CommandHandler("cancelar", cmd_cancelar_tarea),
@@ -382,3 +365,11 @@ def build_newtask_conversation() -> ConversationHandler:
         ],
         allow_reentry=True,
     )
+
+
+def build_tarea_action_handlers() -> list:
+    """Retorna los CallbackQueryHandlers para completar y eliminar tareas."""
+    return [
+        CallbackQueryHandler(callback_completar, pattern="^completar_"),
+        CallbackQueryHandler(callback_eliminar,  pattern="^eliminar_"),
+    ]

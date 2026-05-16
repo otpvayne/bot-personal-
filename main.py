@@ -22,8 +22,7 @@ from handlers.finanzas import (
 from handlers.start import help_handler, start_handler
 from handlers.tareas import (
     build_newtask_conversation,
-    cmd_completar,
-    cmd_eliminar,
+    build_tarea_action_handlers,
     cmd_tarea_rapida,
     cmd_tareas,
 )
@@ -56,8 +55,8 @@ def main() -> None:
     app.add_handler(build_newtask_conversation())
     app.add_handler(CommandHandler("tarea", cmd_tarea_rapida))
     app.add_handler(CommandHandler("tareas", cmd_tareas))
-    app.add_handler(CommandHandler("completar", cmd_completar))
-    app.add_handler(CommandHandler("eliminar", cmd_eliminar))
+    for h in build_tarea_action_handlers():
+        app.add_handler(h)
 
     # --- Finanzas rápidas ---
     app.add_handler(CommandHandler("gasto", cmd_gasto_rapido))
