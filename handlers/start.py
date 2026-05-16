@@ -1,6 +1,7 @@
 """Handlers de /start y /ayuda, y teclado persistente."""
 
 import logging
+import re
 
 from telegram import ReplyKeyboardMarkup, Update
 from telegram.ext import ContextTypes, MessageHandler, filters
@@ -22,20 +23,26 @@ TECLADO_MENU = ReplyKeyboardMarkup(
         ["📊 Balance",     "📖 Historial"],
         ["❓ Ayuda"],
     ],
-    resize_keyboard=True,       # se adapta al tamaño del celular
-    is_persistent=True,         # queda fijo aunque se envíen otros mensajes
+    resize_keyboard=True,
+    is_persistent=True,
 )
 
-# Mapeo botón → comando interno
-_BOTONES = {
-    "📋 mis tareas":   "tareas",
-    "➕ nueva tarea":  "newtask",
-    "💸 nuevo gasto":  "newgasto",
-    "💰 nuevo ingreso":"newingreso",
-    "📊 balance":      "balance",
-    "📖 historial":    "historial",
-    "❓ ayuda":        "ayuda",
+# Mapeo por texto sin emojis (más robusto que comparar emojis)
+_BOTONES_TEXTO = {
+    "mis tareas":   "tareas",
+    "nueva tarea":  "newtask",
+    "nuevo gasto":  "newgasto",
+    "nuevo ingreso": "newingreso",
+    "balance":      "balance",
+    "historial":    "historial",
+    "ayuda":        "ayuda",
 }
+
+
+def _extraer_texto(texto: str) -> str:
+    """Elimina emojis y caracteres especiales, deja solo letras y espacios."""
+    limpio = re.sub(r"[^\w\s]", "", texto, flags=re.UNICODE)
+    return " ".join(limpio.split()).lower()
 
 
 # ---------------------------------------------------------------------------
@@ -93,21 +100,17 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 # ---------------------------------------------------------------------------
 
 async def menu_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Intercepta los textos del teclado y los redirige al comando correcto."""
     if not es_chat_privado(update):
         return
 
-    texto = update.message.text.strip().lower()
-    comando = _BOTONES.get(texto)
+    texto_limpio = _extraer_texto(update.message.text or "")
+    comando = _BOTONES_TEXTO.get(texto_limpio)
 
     if not comando:
-        return  # no es un botón del menú, ignorar
+        return  # no es un botón del menú
 
-    # Simular que el usuario escribió el comando
     context.args = []
-    update.message.text = f"/{comando}"
 
-    # Importar y llamar el handler correspondiente
     if comando == "tareas":
         from handlers.tareas import cmd_tareas
         await cmd_tareas(update, context)
@@ -124,21 +127,19 @@ async def menu_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await help_handler(update, context)
 
     elif comando in ("newtask", "newgasto", "newingreso"):
-        # Los flujos de conversación no se pueden llamar directamente,
-        # le decimos al usuario que escriba el comando
         nombres = {
-            "newtask":    "/newtask — crear tarea con detalles",
-            "newgasto":   "/newgasto — registrar gasto con categoría",
-            "newingreso": "/newingreso — registrar ingreso con categoría",
+            "newtask":    "`/newtask`",
+            "newgasto":   "`/newgasto`",
+            "newingreso": "`/newingreso`",
         }
         await update.message.reply_text(
-            f"Escribe {nombres[comando]}",
+            f"Escribe {nombres[comando]} para continuar.",
+            parse_mode="Markdown",
             reply_markup=TECLADO_MENU,
         )
 
 
 def build_menu_handler() -> MessageHandler:
-    """Retorna el handler que escucha los botones del teclado persistente."""
     return MessageHandler(
         filters.TEXT & ~filters.COMMAND,
         menu_button_handler,

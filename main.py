@@ -47,10 +47,12 @@ def main() -> None:
     start_ping_server()  # HTTP server para Render/UptimeRobot
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
 
-    # --- Información y menú ---
+    # --- Menú (grupo -1 para que tenga prioridad sobre conversaciones) ---
+    app.add_handler(build_menu_handler(), group=-1)
+
+    # --- Información ---
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("ayuda", help_handler))
-    app.add_handler(build_menu_handler())  # botones del teclado persistente
 
     # --- Tareas ---
     app.add_handler(build_newtask_conversation())
