@@ -139,13 +139,7 @@ async def menu_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 def build_menu_handler() -> MessageHandler:
     """Retorna el handler que escucha los botones del teclado persistente."""
-    botones_pattern = "|".join(
-        b.replace("+", r"\+") for b in [
-            "📋 Mis tareas", "➕ Nueva tarea", "💸 Nuevo gasto",
-            "💰 Nuevo ingreso", "📊 Balance", "📖 Historial", "❓ Ayuda",
-        ]
-    )
     return MessageHandler(
-        filters.TEXT & filters.Regex(f"^({botones_pattern})$") & ~filters.COMMAND,
+        filters.TEXT & ~filters.COMMAND,
         menu_button_handler,
     )
