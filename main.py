@@ -1,7 +1,9 @@
 """Punto de entrada del bot de Telegram."""
 
 import logging
+import datetime
 
+import pytz
 from telegram.ext import Application, CommandHandler
 
 import config
@@ -20,6 +22,7 @@ from handlers.finanzas import (
     cmd_ingreso_rapido,
 )
 from handlers.start import help_handler, start_handler, build_menu_handler
+from handlers.recordatorios import recordatorio_diario
 from handlers.tareas import (
     build_newtask_conversation,
     build_tarea_action_handlers,
@@ -75,6 +78,13 @@ def main() -> None:
     app.add_handler(CommandHandler("mes", cmd_mes))
     app.add_handler(CommandHandler("categoria", cmd_categoria))
     app.add_handler(CommandHandler("reporte", cmd_reporte))
+
+    # --- Recordatorio diario 7:00 AM hora Colombia (UTC-5 = 12:00 UTC) ---
+    tz_bogota = pytz.timezone("America/Bogota")
+    app.job_queue.run_daily(
+        recordatorio_diario,
+        time=datetime.time(hour=7, minute=0, tzinfo=tz_bogota),
+    )
 
     logger.info("Bot iniciado — entorno=%s", config.ENVIRONMENT)
     app.run_polling(drop_pending_updates=True)

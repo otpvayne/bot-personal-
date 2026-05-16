@@ -101,6 +101,13 @@ class FirebaseManager:
                 "fecha_registro": datetime.now(_tz).isoformat(),
             })
 
+    def obtener_todos_usuarios(self) -> List[int]:
+        """Retorna lista de todos los user_ids registrados."""
+        data = db.reference("usuarios").get()
+        if not data:
+            return []
+        return [int(uid) for uid in data.keys()]
+
     # ------------------------------------------------------------------
     # Tareas — escritura
     # ------------------------------------------------------------------
