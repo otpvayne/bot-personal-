@@ -19,7 +19,7 @@ from handlers.finanzas import (
     cmd_gasto_rapido,
     cmd_ingreso_rapido,
 )
-from handlers.start import help_handler, start_handler
+from handlers.start import help_handler, start_handler, build_menu_handler
 from handlers.tareas import (
     build_newtask_conversation,
     build_tarea_action_handlers,
@@ -47,9 +47,10 @@ def main() -> None:
     start_ping_server()  # HTTP server para Render/UptimeRobot
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
 
-    # --- Información ---
+    # --- Información y menú ---
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("ayuda", help_handler))
+    app.add_handler(build_menu_handler())  # botones del teclado persistente
 
     # --- Tareas ---
     app.add_handler(build_newtask_conversation())
