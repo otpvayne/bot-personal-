@@ -5,6 +5,7 @@ import logging
 from telegram.ext import Application, CommandHandler
 
 import config
+from server import start_ping_server
 from handlers.consultas import (
     cmd_balance,
     cmd_categoria,
@@ -44,6 +45,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    start_ping_server()  # HTTP server para Render/UptimeRobot
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
 
     # --- Información ---
