@@ -11,6 +11,10 @@ class _PingHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"OK")
 
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
+
     def log_message(self, *args):
         pass  # silenciar logs de cada ping
 
