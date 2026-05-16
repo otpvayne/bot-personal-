@@ -27,15 +27,13 @@ TECLADO_MENU = ReplyKeyboardMarkup(
     is_persistent=True,
 )
 
-# Mapeo por texto sin emojis (más robusto que comparar emojis)
+# Mapeo por texto sin emojis — newtask/newgasto/newingreso los manejan
+# directamente sus ConversationHandlers como entry points
 _BOTONES_TEXTO = {
-    "mis tareas":   "tareas",
-    "nueva tarea":  "newtask",
-    "nuevo gasto":  "newgasto",
-    "nuevo ingreso": "newingreso",
-    "balance":      "balance",
-    "historial":    "historial",
-    "ayuda":        "ayuda",
+    "mis tareas":  "tareas",
+    "balance":     "balance",
+    "historial":   "historial",
+    "ayuda":       "ayuda",
 }
 
 

@@ -389,7 +389,10 @@ async def cancelar_finanza_callback(update: Update, context: ContextTypes.DEFAUL
 
 def build_newgasto_conversation() -> ConversationHandler:
     return ConversationHandler(
-        entry_points=[CommandHandler("newgasto", cmd_newgasto)],
+        entry_points=[
+            CommandHandler("newgasto", cmd_newgasto),
+            MessageHandler(filters.Regex(r"(?i)nuevo\s*gasto"), cmd_newgasto),
+        ],
         states={
             MONTO_GASTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_monto_gasto)],
             CATEGORIA_GASTO: [
@@ -409,7 +412,10 @@ def build_newgasto_conversation() -> ConversationHandler:
 
 def build_newingreso_conversation() -> ConversationHandler:
     return ConversationHandler(
-        entry_points=[CommandHandler("newingreso", cmd_newingreso)],
+        entry_points=[
+            CommandHandler("newingreso", cmd_newingreso),
+            MessageHandler(filters.Regex(r"(?i)nuevo\s*ingreso"), cmd_newingreso),
+        ],
         states={
             MONTO_INGRESO: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_monto_ingreso)],
             CATEGORIA_INGRESO: [

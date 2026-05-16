@@ -352,7 +352,10 @@ async def callback_eliminar(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 def build_newtask_conversation() -> ConversationHandler:
     return ConversationHandler(
-        entry_points=[CommandHandler("newtask", cmd_newtask)],
+        entry_points=[
+            CommandHandler("newtask", cmd_newtask),
+            MessageHandler(filters.Regex(r"(?i)nueva\s*tarea"), cmd_newtask),
+        ],
         states={
             NOMBRE_TAREA:    [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_nombre_tarea)],
             FECHA_TAREA:     [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_fecha_tarea)],
